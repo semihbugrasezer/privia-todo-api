@@ -3,7 +3,8 @@ package mock
 import (
 	"time"
 
-	"github.com/semihbugrasezer/privia-todo-api/models"
+	"privia-staj-backend-todo/models"
+
 	"gorm.io/driver/sqlite" // SQLite veritabanı sürücüsü
 	"gorm.io/gorm"
 )
@@ -22,8 +23,8 @@ func init() {
 }
 
 var Users = map[string]models.User{
-	"user1": {ID: 1, Username: "user1", Password: "password", Type: "user"},
-	"admin": {ID: 2, Username: "admin", Password: "password", Type: "admin"},
+	"user1": {ID: 1, Username: "user1", Password: "password", UserType: "user"},
+	"admin": {ID: 2, Username: "admin", Password: "password", UserType: "admin"},
 }
 
 func LoadMockData() {

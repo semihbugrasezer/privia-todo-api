@@ -1,9 +1,10 @@
 package routes
 
 import (
+	"privia-staj-backend-todo/controllers"
+	"privia-staj-backend-todo/middlewares"
+
 	"github.com/gin-gonic/gin"
-	"github.com/semihbugrasezer/privia-todo-api/controllers"
-	"github.com/semihbugrasezer/privia-todo-api/middlewares"
 )
 
 // SetupRoutes, API endpointlerini ve ilgili controller fonksiyonlarını tanımlar.
@@ -12,8 +13,7 @@ func SetupRoutes(router *gin.Engine) {
 	router.POST("/api/v1/login", controllers.Login)
 
 	// To-Do İşlemleri (Yetkilendirme Gerektirir)
-	authorized := router.Group("/api/v1/todos")
-	authorized.Use(middlewares.AuthMiddleware()) // Yetkilendirme middleware'ı
+	authorized := router.Group("/api/v1/todos", middlewares.AuthMiddleware())
 	{
 		authorized.GET("/", controllers.GetTodos)
 		authorized.POST("/", controllers.CreateTodoList)

@@ -25,7 +25,6 @@ func GenerateJWT(userID uint, userType string) (string, error) {
 			ExpiresAt: expirationTime.Unix(),
 		},
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)
 }
@@ -35,14 +34,11 @@ func ParseJWT(tokenString string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return JwtKey, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
 	if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
 		return claims, nil
 	}
-
 	return nil, err
 }

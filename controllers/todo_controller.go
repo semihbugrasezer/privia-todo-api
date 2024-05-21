@@ -1,14 +1,14 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
+	"privia-staj-backend-todo/mock"
+	"privia-staj-backend-todo/models"
+	"privia-staj-backend-todo/utils"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/semihbugrasezer/privia-todo-api/models"
-	"github.com/semihbugrasezer/privia-todo-api/utils"
 )
 
 // GetTodos tüm todo listelerini getirir (admin tüm listeleri, kullanıcı sadece kendi listelerini görür)
@@ -107,24 +107,25 @@ func DeleteTodoList(c *gin.Context) {
 		return
 	}
 
-	todoList.DeletedAt = gorm.DeletedAt(time.Now()) // Soft delete
+	deletedAt := time.Now() // Soft delete
+	todoList.DeletedAt = &deletedAt
 	mock.DB.Save(&todoList)
 
 	utils.RespondJSON(c, http.StatusOK, "TodoList silindi")
 }
 
-//GetItems 
+// GetItems todo listesindeki tüm öğeleri getirir
 func GetItems(c *gin.Context) {
 	todoIDStr := c.Param("todoId")
 	todoID, err := strconv.Atoi(todoIDStr)
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Invalid todoID")
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
 		return
 	}
 
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList not found")
+		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
 		return
 	}
 
@@ -151,7 +152,7 @@ func CreateTodoItem(c *gin.Context) {
 	todoIDStr := c.Param("todoId")
 	todoID, err := strconv.Atoi(todoIDStr)
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Invalid todoID")
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
 		return
 	}
 	// Liste var mı kontrolü
@@ -167,7 +168,6 @@ func CreateTodoItem(c *gin.Context) {
 		return
 	}
 
-
 	newTodoItem.TodoListID = uint(todoID)
 	newTodoItem.CreatedAt = time.Now()
 	newTodoItem.UpdatedAt = time.Now()
@@ -178,25 +178,27 @@ func CreateTodoItem(c *gin.Context) {
 
 // GetItem todo listesindeki belirli bir öğeyi getirir
 func GetItem(c *gin.Context) {
-    todoIDStr := c.Param("todoId")
-    todoID, err := strconv.Atoi(todoIDStr)
-    if err != nil {
-        utils.RespondError(c, http.StatusBadRequest, "Invalid todoID")
-        return
-    }
-    itemIdStr := c.Param("itemId")
-    itemId, err := strconv.Atoi(itemIdStr)
-    if err != nil {
-        utils.RespondError(c, http.StatusBadRequest, "Invalid itemId")
-        return
-    }
-
-	// todo listesini bul ve yetkilendirme kontrolü yap
-	var todoList models.TodoList
-	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList not found")
+	todoIDStr := c.Param("todoId")
+	todoID, err := strconv.Atoi(todoIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
 		return
 	}
+
+	itemIDStr := c.Param("itemId")
+	itemID, err := strconv.Atoi(itemIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
+		return
+	}
+
+	// Todo listesini bul ve yetkilendirme kontrolü yap
+	var todoList models.TodoList
+	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		return
+	}
+
 	userID := c.GetUint("userID")
 	userType := c.GetString("userType")
 	if todoList.UserID != userID && userType != "admin" {
@@ -204,10 +206,104 @@ func GetItem(c *gin.Context) {
 		return
 	}
 
-
-    var todoItem models.TodoItem
-    if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemId, todoID
-	).First(&todoItem).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoItem not found")
+	var todoItem models.TodoItem
+	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
 		return
-	}	
+	}
+
+	utils.RespondJSON(c, http.StatusOK, todoItem)
+}
+
+// UpdateTodoItem belirli bir ID'ye sahip todo öğesini günceller
+// UpdateTodoItem belirli bir ID'ye sahip todo öğesini günceller
+func UpdateTodoItem(c *gin.Context) {
+	todoIDStr := c.Param("todoId")
+	todoID, err := strconv.Atoi(todoIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
+		return
+	}
+
+	itemIDStr := c.Param("itemId")
+	itemID, err := strconv.Atoi(itemIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
+		return
+	}
+
+	var updatedTodoItem models.TodoItem
+	if err := c.ShouldBindJSON(&updatedTodoItem); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var todoItem models.TodoItem
+	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
+		return
+	}
+
+	// Yetkilendirme kontrolü
+	var todoList models.TodoList
+	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		return
+	}
+	userID := c.GetUint("userID")
+	if todoList.UserID != userID {
+		utils.RespondError(c, http.StatusForbidden, "Bu listeyi güncelleme izniniz yok")
+		return
+	}
+
+	todoItem.Title = updatedTodoItem.Title
+	todoItem.Description = updatedTodoItem.Description
+	todoItem.UpdatedAt = time.Now()
+	if err := mock.DB.Save(&todoItem).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "TodoItem güncellenirken bir hata oluştu: "+err.Error())
+		return
+	}
+
+	utils.RespondJSON(c, http.StatusOK, todoItem)
+}
+
+// DeleteTodoItem belirli bir ID'ye sahip todo öğesini siler (soft delete)
+func DeleteTodoItem(c *gin.Context) {
+	todoIDStr := c.Param("todoId")
+	todoID, err := strconv.Atoi(todoIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
+		return
+	}
+
+	itemIDStr := c.Param("itemId")
+	itemID, err := strconv.Atoi(itemIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
+		return
+	}
+
+	var todoItem models.TodoItem
+	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
+		return
+	}
+
+	// Yetkilendirme kontrolü
+	var todoList models.TodoList
+	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		return
+	}
+	userID := c.GetUint("userID")
+	if todoList.UserID != userID {
+		utils.RespondError(c, http.StatusForbidden, "Bu öğeyi silme izniniz yok")
+		return
+	}
+
+	deletedAt := time.Now() // Soft delete
+	todoItem.DeletedAt = &deletedAt
+	mock.DB.Save(&todoItem)
+
+	utils.RespondJSON(c, http.StatusOK, "TodoItem silindi")
+}

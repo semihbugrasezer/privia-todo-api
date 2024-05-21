@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/semihbugrasezer/privia-todo-api/mock"
-	"github.com/semihbugrasezer/privia-todo-api/controllers"
-    "github.com/semihbugrasezer/privia-todo-api/middlewares"
+	"privia-staj-backend-todo/middlewares"
+	"privia-staj-backend-todo/mock"
+	"privia-staj-backend-todo/routes"
 
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
