@@ -5,41 +5,34 @@ import (
 	"privia-staj-backend-todo/mock"
 	"privia-staj-backend-todo/models"
 	"privia-staj-backend-todo/utils"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
-// Login handles user login and generates a JWT token
 func Login(c *gin.Context) {
-	var credentials models.User
-	if err := c.ShouldBindJSON(&credentials); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz giriş bilgileri")
+	var requestBody models.LoginRequest
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		utils.BadRequest(c, "Invalid input", err)
 		return
 	}
 
-	// Kullanıcı doğrulama (mock data ile karşılaştırma)
-	for _, user := range mock.Users {
-		if user.Username == credentials.Username && user.Password == credentials.Password {
-			// Token oluşturma
-			expirationTime := time.Now().Add(24 * time.Hour) // Token 24 saat geçerli olacak
-			claims := &utils.JWTClaims{
-				UserID:   user.ID,
-				UserType: user.UserType, // UserType alanı düzeltildi
-				StandardClaims: jwt.StandardClaims{
-					ExpiresAt: expirationTime.Unix(),
-				},
-			}
-			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			tokenString, err := token.SignedString(utils.JwtKey)
-			if err != nil {
-				utils.RespondError(c, http.StatusInternalServerError, "Token oluşturulamadı")
-				return
-			}
-			utils.RespondSuccess(c, http.StatusOK, "Giriş başarılı", gin.H{"token": tokenString})
-			return
-		}
+	var user models.User
+	if err := mock.DB.Where("username = ?", requestBody.Username).First(&user).Error; err != nil {
+		utils.Unauthorized(c, "Incorrect username or password: username not found", err)
+		return
 	}
-	utils.RespondError(c, http.StatusUnauthorized, "Geçersiz kullanıcı adı veya parola")
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(requestBody.Password)); err != nil {
+		utils.Unauthorized(c, "Incorrect username or password: password mismatch", err)
+		return
+	}
+
+	token, err := utils.GenerateJWT(user.ID, user.UserType)
+	if err != nil {
+		utils.InternalServerError(c, "Could not generate token", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }

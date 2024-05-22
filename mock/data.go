@@ -5,41 +5,48 @@ import (
 
 	"privia-staj-backend-todo/models"
 
-	"gorm.io/driver/sqlite" // SQLite veritabanı sürücüsü
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-// Mock veritabanı bağlantısı
 var DB *gorm.DB
 
 func init() {
-	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
-		panic("Veritabanı bağlantısı başarısız!")
+		panic("Database connection failed!")
 	}
 	DB = db
-	DB.AutoMigrate(&models.TodoList{}, &models.TodoItem{}) // Tabloları otomatik oluştur
+	DB.Migrator().DropTable(&models.TodoList{}, &models.TodoItem{}, &models.User{})
+	DB.AutoMigrate(&models.TodoList{}, &models.TodoItem{}, &models.User{})
 	LoadMockData()
 }
 
 var Users = map[string]models.User{
-	"user1": {ID: 1, Username: "user1", Password: "password", UserType: "user"},
-	"admin": {ID: 2, Username: "admin", Password: "password", UserType: "admin"},
+	"user":    {ID: 1, Username: "user", Password: "user", UserType: "user"},
+	"admin":   {ID: 2, Username: "admin", Password: "admin", UserType: "admin"},
+	"newuser": {ID: 3, Username: "newuser", Password: "password", UserType: "normal"},
 }
 
 func LoadMockData() {
+	for _, user := range Users {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+		user.Password = string(hashedPassword)
+		DB.Create(&user)
+	}
 
 	DB.Create(&[]models.TodoList{
-		{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "Alışveriş Listesi", CompletionRate: 0.5, UserID: 1},
-		{ID: 2, CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "İş Listesi", CompletionRate: 0.2, UserID: 1},
-		{ID: 3, CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "Tatil Planı", CompletionRate: 0.0, UserID: 2},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "Shopping List", CompletionRate: 0.5, UserID: 1},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "Work List", CompletionRate: 0.2, UserID: 1},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: "Vacation Plan", CompletionRate: 0.0, UserID: 2},
 	})
 
 	DB.Create(&[]models.TodoItem{
-		{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 1, Content: "Süt", Completed: true},
-		{ID: 2, CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 1, Content: "Yumurta", Completed: false},
-		{ID: 3, CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 2, Content: "Rapor hazırla", Completed: false},
-		{ID: 4, CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 2, Content: "Toplantı", Completed: true},
-		{ID: 5, CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 3, Content: "Uçak bileti al", Completed: false},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 1, Content: "Milk", Completed: true},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 1, Content: "Eggs", Completed: false},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 2, Content: "Prepare report", Completed: false},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 2, Content: "Meeting", Completed: true},
+		{CreatedAt: time.Now(), UpdatedAt: time.Now(), TodoListID: 3, Content: "Buy plane ticket", Completed: false},
 	})
 }

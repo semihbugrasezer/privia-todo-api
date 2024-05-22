@@ -3,14 +3,14 @@ package utils
 import (
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // JWTClaims represents the claims in a JWT token
 type JWTClaims struct {
-	UserID   uint   `json:"user_id"`
-	UserType string `json:"user_type"`
-	jwt.StandardClaims
+	UserID   uint   `json:"userId"`
+	UserType string `json:"userType"`
+	jwt.RegisteredClaims
 }
 
 var JwtKey = []byte("your_secret_key") // Güvenli bir anahtar kullanın
@@ -21,8 +21,8 @@ func GenerateJWT(userID uint, userType string) (string, error) {
 	claims := &JWTClaims{
 		UserID:   userID,
 		UserType: userType,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

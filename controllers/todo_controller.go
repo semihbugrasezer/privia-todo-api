@@ -1,17 +1,17 @@
 package controllers
 
 import (
-	"net/http"
+	"strconv"
+	"time"
+
 	"privia-staj-backend-todo/mock"
 	"privia-staj-backend-todo/models"
 	"privia-staj-backend-todo/utils"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GetTodos tüm todo listelerini getirir (admin tüm listeleri, kullanıcı sadece kendi listelerini görür)
+// GetTodos retrieves all todo lists (admin sees all lists, user sees only their own lists)
 func GetTodos(c *gin.Context) {
 	var todos []models.TodoList
 	userType := c.GetString("userType")
@@ -23,14 +23,13 @@ func GetTodos(c *gin.Context) {
 		mock.DB.Where("user_id = ? AND deleted_at IS NULL", userID).Find(&todos)
 	}
 
-	utils.RespondJSON(c, http.StatusOK, todos)
+	utils.OK(c, "Todos retrieved successfully", todos)
 }
 
-// CreateTodoList yeni bir todo listesi oluşturur
 func CreateTodoList(c *gin.Context) {
 	var newTodoList models.TodoList
 	if err := c.ShouldBindJSON(&newTodoList); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.BadRequest(c, "Invalid input", err)
 		return
 	}
 
@@ -40,131 +39,130 @@ func CreateTodoList(c *gin.Context) {
 	newTodoList.UpdatedAt = time.Now()
 
 	mock.DB.Create(&newTodoList)
-	utils.RespondJSON(c, http.StatusCreated, newTodoList)
+	utils.Created(c, "TodoList created successfully", newTodoList)
 }
 
-// GetTodo belirli bir ID'ye sahip todo listesini getirir
+// GetTodo retrieves a specific todo list by ID
 func GetTodo(c *gin.Context) {
 	id := c.Param("id")
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", id).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		utils.NotFound(c, "TodoList not found", err)
 		return
 	}
 
 	userID := c.GetUint("userID")
 	userType := c.GetString("userType")
 	if todoList.UserID != userID && userType != "admin" {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeye erişim izniniz yok")
+		utils.Forbidden(c, "You do not have access to this list", nil)
 		return
 	}
 
-	utils.RespondJSON(c, http.StatusOK, todoList)
+	utils.OK(c, "TodoList retrieved successfully", todoList)
 }
 
-// UpdateTodoList belirli bir ID'ye sahip todo listesini günceller
+// UpdateTodoList updates a specific todo list by ID
 func UpdateTodoList(c *gin.Context) {
-	var updatedTodoList models.TodoList
-	if err := c.ShouldBindJSON(&updatedTodoList); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	id := c.Param("id")
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", id).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		utils.NotFound(c, "TodoList not found", err)
 		return
 	}
 
-	// Yetkilendirme kontrolü
 	userID := c.GetUint("userID")
 	if todoList.UserID != userID {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeyi güncelleme izniniz yok")
+		utils.Forbidden(c, "You do not have permission to update this list", nil)
 		return
 	}
 
-	todoList.Name = updatedTodoList.Name
-	todoList.UpdatedAt = time.Now()
-	mock.DB.Save(&todoList)
+	var updatedTodoList models.TodoList
+	if err := c.ShouldBindJSON(&updatedTodoList); err != nil {
+		utils.BadRequest(c, "Invalid input", err)
+		return
+	}
 
-	utils.RespondJSON(c, http.StatusOK, todoList)
+	updatedTodoList.ID = todoList.ID
+	updatedTodoList.UserID = todoList.UserID
+	updatedTodoList.CreatedAt = todoList.CreatedAt
+	updatedTodoList.UpdatedAt = time.Now()
+
+	mock.DB.Save(&updatedTodoList)
+	utils.OK(c, "TodoList updated successfully", updatedTodoList)
 }
 
-// DeleteTodoList belirli bir ID'ye sahip todo listesini siler (soft delete)
+// DeleteTodoList soft deletes a specific todo list by ID
 func DeleteTodoList(c *gin.Context) {
 	id := c.Param("id")
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", id).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		utils.NotFound(c, "TodoList not found", err)
 		return
 	}
 
-	// Yetkilendirme kontrolü
 	userID := c.GetUint("userID")
 	if todoList.UserID != userID {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeyi silme izniniz yok")
+		utils.Forbidden(c, "You do not have permission to delete this list", nil)
 		return
 	}
 
-	deletedAt := time.Now() // Soft delete
+	deletedAt := time.Now()
 	todoList.DeletedAt = &deletedAt
 	mock.DB.Save(&todoList)
 
-	utils.RespondJSON(c, http.StatusOK, "TodoList silindi")
+	utils.OK(c, "TodoList deleted successfully", nil)
 }
 
-// GetItems todo listesindeki tüm öğeleri getirir
+// GetItems retrieves all items in a specific todo list
 func GetItems(c *gin.Context) {
-	todoIDStr := c.Param("todoId")
+	todoIDStr := c.Param("id")
 	todoID, err := strconv.Atoi(todoIDStr)
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
+		utils.BadRequest(c, "Invalid todo ID", err)
 		return
 	}
 
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		utils.NotFound(c, "TodoList not found", err)
 		return
 	}
 
-	// Yetkilendirme kontrolü
 	userID := c.GetUint("userID")
-	userType := c.GetString("userType")
-	if todoList.UserID != userID && userType != "admin" {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeye erişim izniniz yok")
+	if todoList.UserID != userID {
+		utils.Forbidden(c, "You do not have access to this list", nil)
 		return
 	}
 
 	var todoItems []models.TodoItem
 	mock.DB.Where("todo_list_id = ? AND deleted_at IS NULL", todoID).Find(&todoItems)
-	utils.RespondJSON(c, http.StatusOK, todoItems)
+	utils.OK(c, "TodoItems retrieved successfully", todoItems)
 }
 
-// CreateTodoItem todo listesine yeni bir öğe ekler
+// CreateTodoItem creates a new item in a specific todo list
 func CreateTodoItem(c *gin.Context) {
-	var newTodoItem models.TodoItem
-	if err := c.ShouldBindJSON(&newTodoItem); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	todoIDStr := c.Param("todoId")
+	todoIDStr := c.Param("id")
 	todoID, err := strconv.Atoi(todoIDStr)
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
+		utils.BadRequest(c, "Invalid todo ID", err)
 		return
 	}
-	// Liste var mı kontrolü
+
 	var todoList models.TodoList
 	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+		utils.NotFound(c, "TodoList not found", err)
 		return
 	}
-	// Yetkilendirme kontrolü
+
 	userID := c.GetUint("userID")
 	if todoList.UserID != userID {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeye erişim izniniz yok")
+		utils.Forbidden(c, "You do not have access to this list", nil)
+		return
+	}
+
+	var newTodoItem models.TodoItem
+	if err := c.ShouldBindJSON(&newTodoItem); err != nil {
+		utils.BadRequest(c, "Invalid input", err)
 		return
 	}
 
@@ -173,137 +171,62 @@ func CreateTodoItem(c *gin.Context) {
 	newTodoItem.UpdatedAt = time.Now()
 
 	mock.DB.Create(&newTodoItem)
-	utils.RespondJSON(c, http.StatusCreated, newTodoItem)
+	utils.Created(c, "TodoItem created successfully", newTodoItem)
 }
 
-// GetItem todo listesindeki belirli bir öğeyi getirir
-func GetItem(c *gin.Context) {
-	todoIDStr := c.Param("todoId")
-	todoID, err := strconv.Atoi(todoIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
-		return
-	}
+// GetItem retrieves a specific item in a todo list
+func UpdateTodoItem(c *gin.Context) {
+	todoID := c.Param("todoId") // Parametre adı ':id' yerine ':todoId' olarak değiştirildi
+	itemID := c.Param("itemId") // Parametre adı ':item_id' yerine ':itemId' olarak değiştirildi
 
-	itemIDStr := c.Param("itemId")
-	itemID, err := strconv.Atoi(itemIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
-		return
-	}
-
-	// Todo listesini bul ve yetkilendirme kontrolü yap
-	var todoList models.TodoList
-	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
+	var todoItem models.TodoItem
+	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
+		utils.NotFound(c, "TodoItem not found", err)
 		return
 	}
 
 	userID := c.GetUint("userID")
-	userType := c.GetString("userType")
-	if todoList.UserID != userID && userType != "admin" {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeye erişim izniniz yok")
-		return
-	}
-
-	var todoItem models.TodoItem
-	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
-		return
-	}
-
-	utils.RespondJSON(c, http.StatusOK, todoItem)
-}
-
-// UpdateTodoItem belirli bir ID'ye sahip todo öğesini günceller
-// UpdateTodoItem belirli bir ID'ye sahip todo öğesini günceller
-func UpdateTodoItem(c *gin.Context) {
-	todoIDStr := c.Param("todoId")
-	todoID, err := strconv.Atoi(todoIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
-		return
-	}
-
-	itemIDStr := c.Param("itemId")
-	itemID, err := strconv.Atoi(itemIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
+	if todoItem.UserID != userID {
+		utils.Forbidden(c, "You do not have permission to update this item", nil)
 		return
 	}
 
 	var updatedTodoItem models.TodoItem
 	if err := c.ShouldBindJSON(&updatedTodoItem); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.BadRequest(c, "Invalid input", err)
 		return
 	}
 
-	var todoItem models.TodoItem
-	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
-		return
-	}
+	updatedTodoItem.ID = todoItem.ID
+	updatedTodoItem.TodoListID = todoItem.TodoListID
+	updatedTodoItem.CreatedAt = todoItem.CreatedAt
+	updatedTodoItem.UpdatedAt = time.Now()
 
-	// Yetkilendirme kontrolü
-	var todoList models.TodoList
-	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
-		return
-	}
-	userID := c.GetUint("userID")
-	if todoList.UserID != userID {
-		utils.RespondError(c, http.StatusForbidden, "Bu listeyi güncelleme izniniz yok")
-		return
-	}
+	mock.DB.Save(&updatedTodoItem)
 
-	todoItem.Title = updatedTodoItem.Title
-	todoItem.Description = updatedTodoItem.Description
-	todoItem.UpdatedAt = time.Now()
-	if err := mock.DB.Save(&todoItem).Error; err != nil {
-		utils.RespondError(c, http.StatusInternalServerError, "TodoItem güncellenirken bir hata oluştu: "+err.Error())
-		return
-	}
-
-	utils.RespondJSON(c, http.StatusOK, todoItem)
+	utils.OK(c, "TodoItem updated successfully", updatedTodoItem)
 }
 
-// DeleteTodoItem belirli bir ID'ye sahip todo öğesini siler (soft delete)
+// DeleteTodoItem soft deletes a specific item in a todo list
 func DeleteTodoItem(c *gin.Context) {
-	todoIDStr := c.Param("todoId")
-	todoID, err := strconv.Atoi(todoIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz todoID")
-		return
-	}
-
-	itemIDStr := c.Param("itemId")
-	itemID, err := strconv.Atoi(itemIDStr)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "Geçersiz öğe ID'si")
-		return
-	}
+	todoID := c.Param("todoId") // Parametre adı ':id' yerine ':todoId' olarak değiştirildi
+	itemID := c.Param("itemId") // Parametre adı ':item_id' yerine ':itemId' olarak değiştirildi
 
 	var todoItem models.TodoItem
 	if err := mock.DB.Where("id = ? AND todo_list_id = ? AND deleted_at IS NULL", itemID, todoID).First(&todoItem).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoItem bulunamadı")
+		utils.NotFound(c, "TodoItem not found", err)
 		return
 	}
 
-	// Yetkilendirme kontrolü
-	var todoList models.TodoList
-	if err := mock.DB.Where("id = ? AND deleted_at IS NULL", todoID).First(&todoList).Error; err != nil {
-		utils.RespondError(c, http.StatusNotFound, "TodoList bulunamadı")
-		return
-	}
 	userID := c.GetUint("userID")
-	if todoList.UserID != userID {
-		utils.RespondError(c, http.StatusForbidden, "Bu öğeyi silme izniniz yok")
+	if todoItem.UserID != userID {
+		utils.Forbidden(c, "You do not have permission to delete this item", nil)
 		return
 	}
 
-	deletedAt := time.Now() // Soft delete
+	deletedAt := time.Now()
 	todoItem.DeletedAt = &deletedAt
 	mock.DB.Save(&todoItem)
 
-	utils.RespondJSON(c, http.StatusOK, "TodoItem silindi")
+	utils.OK(c, "TodoItem deleted successfully", nil)
 }
